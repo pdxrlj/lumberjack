@@ -107,6 +107,8 @@ type Logger struct {
 	// using gzip. The default is not to perform compression.
 	Compress bool `json:"compress" yaml:"compress"`
 
+	BackupTimeFormat string `json:"backup_time_format" yaml:"backupTimeFormat"`
+
 	size int64
 	file *os.File
 	mu   sync.Mutex
@@ -218,7 +220,10 @@ func (l *Logger) openNew() error {
 		// Copy the mode off the old logfile.
 		mode = info.Mode()
 		// move the existing file
-		newname := backupName(name, l.LocalTime)
+		if l.BackupTimeFormat == "" {
+			l.BackupTimeFormat = backupTimeFormat
+		}
+		newname := backupName(name, l.LocalTime, l.BackupTimeFormat)
 		if err := os.Rename(name, newname); err != nil {
 			return fmt.Errorf("can't rename log file: %s", err)
 		}
@@ -244,7 +249,7 @@ func (l *Logger) openNew() error {
 // backupName creates a new filename from the given name, inserting a timestamp
 // between the filename and the extension, using the local time if requested
 // (otherwise UTC).
-func backupName(name string, local bool) string {
+func backupName(name string, local bool, backupTimeFormat string) string {
 	dir := filepath.Dir(name)
 	filename := filepath.Base(name)
 	ext := filepath.Ext(filename)
@@ -438,7 +443,12 @@ func (l *Logger) timeFromName(filename, prefix, ext string) (time.Time, error) {
 		return time.Time{}, errors.New("mismatched extension")
 	}
 	ts := filename[len(prefix) : len(filename)-len(ext)]
-	return time.Parse(backupTimeFormat, ts)
+
+	if l.BackupTimeFormat == "" {
+		l.BackupTimeFormat = backupTimeFormat
+	}
+
+	return time.Parse(l.BackupTimeFormat, ts)
 }
 
 // max returns the maximum size in bytes of log files before rolling.
